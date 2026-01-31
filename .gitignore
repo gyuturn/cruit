@@ -49,8 +49,9 @@ next-env.d.ts
 *.swp
 *.swo
 
-# Claude Code
-.claude/
+# Claude Code (로컬 설정만 제외, agents/commands는 포함)
+.claude/settings.local.json
+.claude/statsig/
 
 # GitHub token (NEVER commit this)
 .github-token
