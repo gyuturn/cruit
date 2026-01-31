@@ -1,5 +1,31 @@
 # Cruit 프로젝트 가이드
 
+## 🚨 중요: 기능 요청 자동 처리 규칙
+
+사용자가 **기능 추가, 버그 수정, 개선 요청**을 하면 다음 워크플로우를 **자동으로** 실행하세요:
+
+### 자동 워크플로우
+1. **PM 역할 수행**
+   - 요구사항을 기술적으로 분석
+   - `gh issue create --repo gyuturn/cruit --title "[제목]" --body "[분석내용]" --assignee gyuturn --label "feature"` 로 이슈 생성
+
+2. **개발자 역할 수행**
+   - `git checkout main && git pull origin main`
+   - `git checkout -b feature/issue-[번호]-[설명]` 브랜치 생성
+   - 코드 구현
+   - `git add && git commit` 커밋
+   - `git push -u origin [브랜치]` 푸시
+   - `gh pr create --repo gyuturn/cruit` PR 생성
+
+3. **결과 보고**
+   - 이슈 URL, PR URL, 변경 파일 목록 알려주기
+
+### 예시
+사용자: "검색 필터 기능 추가해줘"
+→ 자동으로 이슈 생성 → 브랜치 생성 → 개발 → PR 생성
+
+---
+
 ## 프로젝트 개요
 AI 기반 취업 추천 시스템 - 한국 구직자를 위한 맞춤형 채용공고 추천
 
@@ -26,7 +52,7 @@ src/
 
 # 멀티 에이전트 시스템
 
-## 핵심 사용법 (원클릭 개발)
+## 핵심 사용법
 
 ### 기능 요청 → 개발 → PR 자동화
 ```
