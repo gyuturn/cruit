@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { UserProfile, Recommendation, FavoriteJob, RatingWithJobInfo, AIFeedbackData } from '@/types';
 import { getProfile, deleteProfile, getFavorites, getRatings, getRecommendations as getCachedRecommendations, saveRecommendations } from '@/lib/storage';
 import ProfileForm from '@/components/ProfileForm';
@@ -9,11 +10,13 @@ import JobList from '@/components/JobList';
 import TabNavigation from '@/components/TabNavigation';
 import FavoritesList from '@/components/FavoritesList';
 import AIFeedbackModal from '@/components/AIFeedbackModal';
+import AuthButton from '@/components/AuthButton';
 import { RotateCcw } from 'lucide-react';
 
 const PAGE_SIZE = 5;
 
 export default function Home() {
+  const { data: session, status } = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [favorites, setFavorites] = useState<FavoriteJob[]>([]);
@@ -233,22 +236,74 @@ export default function Home() {
           <h1 className="text-2xl font-bold text-gray-800">
             취업 공고 추천
           </h1>
-          {profile && (
-            <button
-              onClick={handleReset}
-              className="inline-flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-md"
-            >
-              <RotateCcw size={16} />
-              초기화
-            </button>
-          )}
+          <div className="flex items-center gap-4">
+            {profile && session && (
+              <button
+                onClick={handleReset}
+                className="inline-flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-md"
+              >
+                <RotateCcw size={16} />
+                초기화
+              </button>
+            )}
+            <AuthButton />
+          </div>
         </div>
       </header>
 
       {/* 메인 컨텐츠 */}
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {!profile ? (
-          // 프로필 미등록 시 입력 폼
+        {status === "loading" ? (
+          // 세션 로딩 중
+          <div className="flex items-center justify-center py-20">
+            <div className="text-gray-500">로딩 중...</div>
+          </div>
+        ) : !session ? (
+          // 로그인하지 않은 상태 - 로그인 유도
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">AI 맞춤 취업 추천</h2>
+              <p className="text-gray-600 mb-6">
+                카카오 계정으로 로그인하고<br />
+                나에게 딱 맞는 취업 공고를 추천받으세요
+              </p>
+            </div>
+            <div className="space-y-4">
+              <button
+                onClick={() => {
+                  const { signIn } = require('next-auth/react');
+                  signIn('kakao');
+                }}
+                className="w-full max-w-xs mx-auto flex items-center justify-center gap-3 px-6 py-3 bg-[#FEE500] hover:bg-[#FDD835] text-[#191919] font-medium rounded-lg transition-colors"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M12 4C7.02944 4 3 7.16393 3 11.0909C3 13.5907 4.55511 15.7907 6.94628 17.0698L5.73199 21.0513C5.64503 21.3413 5.97889 21.5744 6.23061 21.4042L10.9259 18.3052C11.2776 18.3415 11.6354 18.3636 12 18.3636C16.9706 18.3636 21 15.0179 21 11.0909C21 7.16393 16.9706 4 12 4Z" fill="#191919"/>
+                </svg>
+                카카오로 시작하기
+              </button>
+            </div>
+            <div className="mt-8 pt-6 border-t">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">주요 기능</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-500">✓</span> 전공 기반 맞춤 추천
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-500">✓</span> 5개 사이트 통합 검색
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-500">✓</span> AI 학습으로 추천 개선
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : !profile ? (
+          // 로그인했지만 프로필 미등록 시 입력 폼
           <ProfileForm onComplete={handleProfileComplete} />
         ) : (
           // 프로필 등록 후 추천 목록
