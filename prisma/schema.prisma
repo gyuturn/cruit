@@ -1,0 +1,176 @@
+// Prisma 스키마 - Cruit 취업 추천 시스템
+// NextAuth.js + Prisma Adapter 호환
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NextAuth.js 필수 모델
+// ═══════════════════════════════════════════════════════════════
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 사용자 모델
+// ═══════════════════════════════════════════════════════════════
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts Account[]
+  sessions Session[]
+  profile  UserProfile?
+  ratings  JobRating[]
+  favorites Favorite[]
+  seenJobs SeenJob[]
+  feedbacks AIFeedback[]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 사용자 프로필 (취업 정보)
+// ═══════════════════════════════════════════════════════════════
+
+model UserProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  experienceLevel  String   // 'junior' | 'experienced'
+  isFourYearUniv   Boolean  @default(true)
+  universityRegion String?
+  universityName   String?
+  major            String
+  certifications   String[] // 자격증 목록
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  careerHistory CareerHistory[]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 경력 사항 (경력자용)
+// ═══════════════════════════════════════════════════════════════
+
+model CareerHistory {
+  id          String  @id @default(cuid())
+  profileId   String
+  company     String
+  position    String
+  startDate   String  // YYYY-MM
+  endDate     String  // YYYY-MM 또는 '재직중'
+  description String?
+
+  profile UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 공고 평점
+// ═══════════════════════════════════════════════════════════════
+
+model JobRating {
+  id        String   @id @default(cuid())
+  userId    String
+  jobId     String   // 크롤링된 공고 ID
+  rating    Int      // 1-5
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 즐겨찾기
+// ═══════════════════════════════════════════════════════════════
+
+model Favorite {
+  id           String   @id @default(cuid())
+  userId       String
+  jobId        String   // 크롤링된 공고 ID
+  jobData      Json     // 공고 전체 데이터 저장
+  matchScore   Int?     // AI 매칭 점수
+  matchReasons String[] // AI 매칭 이유
+  savedAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 본 공고 기록 (중복 추천 방지)
+// ═══════════════════════════════════════════════════════════════
+
+model SeenJob {
+  id        String   @id @default(cuid())
+  userId    String
+  jobKey    String   // 정규화된 공고 키 (company_title)
+  seenAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobKey])
+  @@index([userId, seenAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI 피드백 (학습용)
+// ═══════════════════════════════════════════════════════════════
+
+model AIFeedback {
+  id                 String   @id @default(cuid())
+  userId             String
+  generalFeedback    String?  @db.Text
+  selectedTags       String[]
+  preferenceKeywords String[]
+  avoidKeywords      String[]
+  createdAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
