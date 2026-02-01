@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { UserProfile, Recommendation, FavoriteJob, RatingWithJobInfo, AIFeedbackData } from '@/types';
 import { getProfile, deleteProfile, getFavorites, getRatings, getRecommendations as getCachedRecommendations, saveRecommendations } from '@/lib/storage';
 import ProfileForm from '@/components/ProfileForm';
@@ -208,7 +208,7 @@ export default function Home() {
   };
 
   // 즐겨찾기 삭제 핸들러
-  const handleFavoriteRemove = (jobId: string) => {
+  const handleFavoriteRemove = (_jobId: string) => {
     setFavorites(getFavorites());
   };
 
@@ -275,10 +275,7 @@ export default function Home() {
             </div>
             <div className="space-y-4">
               <button
-                onClick={() => {
-                  const { signIn } = require('next-auth/react');
-                  signIn('kakao');
-                }}
+                onClick={() => signIn('kakao')}
                 className="w-full max-w-xs mx-auto flex items-center justify-center gap-3 px-6 py-3 bg-[#FEE500] hover:bg-[#FDD835] text-[#191919] font-medium rounded-lg transition-colors"
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

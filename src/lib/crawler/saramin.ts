@@ -71,7 +71,7 @@ export async function crawlSaramin(params: SaraminSearchParams = {}): Promise<Jo
         const location = conditions[0] || '미정';
         const experienceLevel = conditions[1] || '무관';
         const education = conditions[2] || '학력무관';
-        const employmentType = conditions[3] || '';
+        const _employmentType = conditions[3] || '';
 
         // 마감일
         const deadlineText = $item.find('.job_date .date').text().trim();

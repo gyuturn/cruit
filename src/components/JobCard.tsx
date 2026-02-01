@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Recommendation } from '@/types';
 import { Building2, MapPin, Calendar, ExternalLink, Star, Heart } from 'lucide-react';
 import { saveRating, getRating, isFavorite, toggleFavorite } from '@/lib/storage';
@@ -13,18 +13,9 @@ interface JobCardProps {
 
 export default function JobCard({ recommendation, onRatingChange, onFavoriteChange }: JobCardProps) {
   const { jobPosting, matchScore, matchReasons } = recommendation;
-  const [rating, setRating] = useState<number>(0);
+  const [rating, setRating] = useState<number>(() => getRating(jobPosting.id) || 0);
   const [hoverRating, setHoverRating] = useState<number>(0);
-  const [isFav, setIsFav] = useState<boolean>(false);
-
-  // 저장된 평점 및 즐겨찾기 로드
-  useEffect(() => {
-    const savedRating = getRating(jobPosting.id);
-    if (savedRating) {
-      setRating(savedRating);
-    }
-    setIsFav(isFavorite(jobPosting.id));
-  }, [jobPosting.id]);
+  const [isFav, setIsFav] = useState<boolean>(() => isFavorite(jobPosting.id));
 
   const handleFavoriteToggle = () => {
     const newState = toggleFavorite(jobPosting, matchScore, matchReasons);

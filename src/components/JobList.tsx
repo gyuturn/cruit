@@ -62,7 +62,7 @@ export default function JobList({
               <JobCard
                 key={rec.jobPosting.id || idx}
                 recommendation={rec}
-                onFavoriteChange={onFavoriteChange ? (jobId, isFav) => onFavoriteChange() : undefined}
+                onFavoriteChange={onFavoriteChange ? (_jobId, _isFav) => onFavoriteChange() : undefined}
               />
             ))}
           </div>

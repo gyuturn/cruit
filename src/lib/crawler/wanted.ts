@@ -8,6 +8,17 @@ interface WantedSearchParams {
   experienceLevel?: 'junior' | 'experienced';
 }
 
+interface WantedJob {
+  id: number;
+  position: string;
+  company?: { name: string };
+  address?: { full_location?: string; location?: string };
+  annual_from?: number;
+  annual_to?: number;
+  reward?: { formatted_total?: string };
+  due_time?: string;
+}
+
 // 원티드 크롤링 (API 기반)
 export async function crawlWanted(params: WantedSearchParams = {}): Promise<JobPosting[]> {
   const jobs: JobPosting[] = [];
@@ -48,7 +59,7 @@ export async function crawlWanted(params: WantedSearchParams = {}): Promise<JobP
     const data = await response.json();
     const jobList = data?.data || [];
 
-    jobList.forEach((item: any, index: number) => {
+    jobList.forEach((item: WantedJob) => {
       try {
         // API 응답 구조에 맞게 파싱
         const title = item.position || '';

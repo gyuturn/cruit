@@ -308,12 +308,6 @@ function generateSearchKeywords(profile?: UserProfile): string[] {
   return uniqueKeywords;
 }
 
-// 단일 키워드 문자열로 변환 (기존 호환성)
-function getMainSearchKeyword(profile?: UserProfile): string {
-  const keywords = generateSearchKeywords(profile);
-  return keywords[0] || '신입 채용';
-}
-
 // 단일 키워드로 모든 소스 크롤링
 async function crawlWithKeyword(
   keyword: string,

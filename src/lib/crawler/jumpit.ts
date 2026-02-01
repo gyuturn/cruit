@@ -8,6 +8,17 @@ interface JumpitSearchParams {
   experienceLevel?: 'junior' | 'experienced';
 }
 
+interface JumpitPosition {
+  id: number;
+  title: string;
+  companyName: string;
+  locations?: string[] | string;
+  techStacks?: (string | { name: string })[];
+  minCareer?: number;
+  maxCareer?: number;
+  endDate?: string;
+}
+
 // 점핏 크롤링 (API 기반)
 export async function crawlJumpit(params: JumpitSearchParams = {}): Promise<JobPosting[]> {
   const jobs: JobPosting[] = [];
@@ -47,7 +58,7 @@ export async function crawlJumpit(params: JumpitSearchParams = {}): Promise<JobP
     // API 응답 구조: { result: { positions: [...] } }
     const jobList = data?.result?.positions || [];
 
-    jobList.forEach((item: any) => {
+    jobList.forEach((item: JumpitPosition) => {
       try {
         const jobId = item.id;
         const title = item.title || '';
@@ -66,7 +77,7 @@ export async function crawlJumpit(params: JumpitSearchParams = {}): Promise<JobP
         // 기술스택 처리
         let skills: string[] = [];
         if (Array.isArray(item.techStacks)) {
-          skills = item.techStacks.map((tech: any) =>
+          skills = item.techStacks.map((tech: string | { name: string }) =>
             typeof tech === 'string' ? tech : tech.name || ''
           ).filter((s: string) => s);
         }

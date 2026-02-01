@@ -1,7 +1,6 @@
 import * as cheerio from 'cheerio';
 import { JobPosting } from '@/types';
 
-const BASE_URL = 'https://www.incruit.com';
 const SEARCH_URL = 'https://search.incruit.com/list/search.asp';
 
 interface IncruitSearchParams {
