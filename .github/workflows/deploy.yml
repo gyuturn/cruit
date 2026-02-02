@@ -12,7 +12,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: VERCEL_TOKEN
+    environment: prd
 
     steps:
       - name: Checkout
