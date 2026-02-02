@@ -16,6 +16,10 @@ interface JumpitPosition {
   techStacks?: (string | { name: string })[];
   minCareer?: number;
   maxCareer?: number;
+  newcomer?: boolean;
+  celebration?: number;
+  closedAt?: string;
+  jobCategory?: string;
   endDate?: string;
 }
 
