@@ -41,11 +41,21 @@ jobs:
       - name: Pull Vercel Environment Information
         run: |
           vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-          # Fix local path issue in project.json
-          cat .vercel/project.json | jq 'del(.directory)' > .vercel/project.json.tmp && mv .vercel/project.json.tmp .vercel/project.json
+          # Fix local path issue - remove directory field from all config files
+          echo "Before fix:"
+          cat .vercel/project.json
+          # Remove directory field if exists
+          if command -v jq &> /dev/null; then
+            cat .vercel/project.json | jq 'del(.directory)' > .vercel/project.json.tmp && mv .vercel/project.json.tmp .vercel/project.json
+          else
+            sed -i 's/"directory":"[^"]*",//g' .vercel/project.json
+            sed -i 's/,"directory":"[^"]*"//g' .vercel/project.json
+          fi
+          echo "After fix:"
+          cat .vercel/project.json
 
       - name: Build Project
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd=.
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
