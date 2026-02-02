@@ -33,29 +33,8 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Link Vercel Project
-        run: |
-          mkdir -p .vercel
-          echo '{"projectId":"${{ secrets.VERCEL_PROJECT_ID }}","orgId":"${{ secrets.VERCEL_ORG_ID }}"}' > .vercel/project.json
-
-      - name: Pull Vercel Environment Information
-        run: |
-          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-          # Fix local path issue - remove directory field from all config files
-          echo "Before fix:"
-          cat .vercel/project.json
-          # Remove directory field if exists
-          if command -v jq &> /dev/null; then
-            cat .vercel/project.json | jq 'del(.directory)' > .vercel/project.json.tmp && mv .vercel/project.json.tmp .vercel/project.json
-          else
-            sed -i 's/"directory":"[^"]*",//g' .vercel/project.json
-            sed -i 's/,"directory":"[^"]*"//g' .vercel/project.json
-          fi
-          echo "After fix:"
-          cat .vercel/project.json
-
-      - name: Build Project
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd=.
+      - name: Deploy to Vercel (Production)
+        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
@@ -63,6 +42,3 @@ jobs:
           NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
           KAKAO_CLIENT_ID: ${{ secrets.KAKAO_CLIENT_ID }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
-
-      - name: Deploy to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
