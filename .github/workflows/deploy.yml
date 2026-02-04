@@ -33,12 +33,49 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Deploy to Vercel (Production)
+      - name: Set Vercel Environment Variables
         run: |
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} \
-            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            -e DIRECT_URL="${{ secrets.DIRECT_URL }}" \
-            -e NEXTAUTH_SECRET="${{ secrets.NEXTAUTH_SECRET }}" \
-            -e NEXTAUTH_URL="${{ secrets.NEXTAUTH_URL }}" \
-            -e KAKAO_CLIENT_ID="${{ secrets.KAKAO_CLIENT_ID }}" \
-            -e KAKAO_CLIENT_SECRET="${{ secrets.KAKAO_CLIENT_SECRET }}"
+          # Function to upsert environment variable
+          upsert_env() {
+            local key=$1
+            local value=$2
+
+            # Check if env var exists
+            existing=$(curl -s -X GET \
+              "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?key=$key" \
+              -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+              -H "Content-Type: application/json")
+
+            env_id=$(echo "$existing" | jq -r '.envs[0].id // empty')
+
+            if [ -n "$env_id" ]; then
+              # Update existing
+              curl -s -X PATCH \
+                "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env/$env_id" \
+                -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"value\":\"$value\"}" > /dev/null
+              echo "Updated: $key"
+            else
+              # Create new
+              curl -s -X POST \
+                "https://api.vercel.com/v10/projects/${{ secrets.VERCEL_PROJECT_ID }}/env" \
+                -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                -d "{\"key\":\"$key\",\"value\":\"$value\",\"target\":[\"production\"],\"type\":\"encrypted\"}" > /dev/null
+              echo "Created: $key"
+            fi
+          }
+
+          # Set all environment variables
+          upsert_env "DATABASE_URL" "${{ secrets.DATABASE_URL }}"
+          upsert_env "DIRECT_URL" "${{ secrets.DIRECT_URL }}"
+          upsert_env "NEXTAUTH_SECRET" "${{ secrets.NEXTAUTH_SECRET }}"
+          upsert_env "NEXTAUTH_URL" "${{ secrets.NEXTAUTH_URL }}"
+          upsert_env "KAKAO_CLIENT_ID" "${{ secrets.KAKAO_CLIENT_ID }}"
+          upsert_env "KAKAO_CLIENT_SECRET" "${{ secrets.KAKAO_CLIENT_SECRET }}"
+
+          echo "Environment variables configured successfully"
+
+      - name: Deploy to Vercel (Production)
+        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
