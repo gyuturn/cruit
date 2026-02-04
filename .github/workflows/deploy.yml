@@ -40,6 +40,12 @@ jobs:
             local key=$1
             local value=$2
 
+            # Skip if value is empty
+            if [ -z "$value" ]; then
+              echo "⚠️  WARNING: $key is empty or not set in GitHub Secrets!"
+              return 1
+            fi
+
             # Check if env var exists
             existing=$(curl -s -X GET \
               "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env?key=$key" \
@@ -50,32 +56,59 @@ jobs:
 
             if [ -n "$env_id" ]; then
               # Update existing
-              curl -s -X PATCH \
+              response=$(curl -s -X PATCH \
                 "https://api.vercel.com/v9/projects/${{ secrets.VERCEL_PROJECT_ID }}/env/$env_id" \
                 -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                -d "{\"value\":\"$value\"}" > /dev/null
-              echo "Updated: $key"
+                -d "{\"value\":\"$value\"}")
+              if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+                echo "❌ Failed to update $key: $(echo "$response" | jq -r '.error.message')"
+                return 1
+              fi
+              echo "✅ Updated: $key"
             else
               # Create new
-              curl -s -X POST \
+              response=$(curl -s -X POST \
                 "https://api.vercel.com/v10/projects/${{ secrets.VERCEL_PROJECT_ID }}/env" \
                 -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                -d "{\"key\":\"$key\",\"value\":\"$value\",\"target\":[\"production\"],\"type\":\"encrypted\"}" > /dev/null
-              echo "Created: $key"
+                -d "{\"key\":\"$key\",\"value\":\"$value\",\"target\":[\"production\"],\"type\":\"encrypted\"}")
+              if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+                echo "❌ Failed to create $key: $(echo "$response" | jq -r '.error.message')"
+                return 1
+              fi
+              echo "✅ Created: $key"
             fi
           }
 
-          # Set all environment variables
-          upsert_env "DATABASE_URL" "${{ secrets.DATABASE_URL }}"
-          upsert_env "DIRECT_URL" "${{ secrets.DIRECT_URL }}"
-          upsert_env "NEXTAUTH_SECRET" "${{ secrets.NEXTAUTH_SECRET }}"
-          upsert_env "NEXTAUTH_URL" "${{ secrets.NEXTAUTH_URL }}"
-          upsert_env "KAKAO_CLIENT_ID" "${{ secrets.KAKAO_CLIENT_ID }}"
-          upsert_env "KAKAO_CLIENT_SECRET" "${{ secrets.KAKAO_CLIENT_SECRET }}"
+          echo "Setting Vercel environment variables..."
 
-          echo "Environment variables configured successfully"
+          # Track failures
+          failed=0
+
+          # Set all environment variables
+          upsert_env "DATABASE_URL" "${{ secrets.DATABASE_URL }}" || failed=1
+          upsert_env "DIRECT_URL" "${{ secrets.DIRECT_URL }}" || failed=1
+          upsert_env "NEXTAUTH_SECRET" "${{ secrets.NEXTAUTH_SECRET }}" || failed=1
+          upsert_env "NEXTAUTH_URL" "${{ secrets.NEXTAUTH_URL }}" || failed=1
+          upsert_env "KAKAO_CLIENT_ID" "${{ secrets.KAKAO_CLIENT_ID }}" || failed=1
+          upsert_env "KAKAO_CLIENT_SECRET" "${{ secrets.KAKAO_CLIENT_SECRET }}" || failed=1
+
+          if [ "$failed" -eq 1 ]; then
+            echo ""
+            echo "⚠️  Some environment variables could not be set."
+            echo "Please check that all required secrets are configured in GitHub:"
+            echo "  - DATABASE_URL"
+            echo "  - DIRECT_URL"
+            echo "  - NEXTAUTH_SECRET"
+            echo "  - NEXTAUTH_URL"
+            echo "  - KAKAO_CLIENT_ID"
+            echo "  - KAKAO_CLIENT_SECRET"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All environment variables configured successfully"
 
       - name: Deploy to Vercel (Production)
         run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
