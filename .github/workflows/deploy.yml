@@ -110,11 +110,5 @@ jobs:
           echo ""
           echo "✅ All environment variables configured successfully"
 
-      - name: Run Prisma DB Push
-        run: npx prisma db push --skip-generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DIRECT_URL }}
-
       - name: Deploy to Vercel (Production)
         run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
