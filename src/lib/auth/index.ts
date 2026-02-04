@@ -33,6 +33,14 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30일
   },
   callbacks: {
+    async signIn({ user, account, profile }) {
+      console.log("[NextAuth] signIn callback:", {
+        userId: user?.id,
+        provider: account?.provider,
+        profileId: profile?.id,
+      });
+      return true;
+    },
     async session({ session, user }) {
       // 세션에 사용자 ID 추가
       if (session.user) {
@@ -41,9 +49,31 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  events: {
+    async signIn({ user, account }) {
+      console.log("[NextAuth] signIn event:", { userId: user?.id, provider: account?.provider });
+    },
+    async createUser({ user }) {
+      console.log("[NextAuth] createUser event:", { userId: user?.id, email: user?.email });
+    },
+    async linkAccount({ user, account }) {
+      console.log("[NextAuth] linkAccount event:", { userId: user?.id, provider: account?.provider });
+    },
+  },
+  logger: {
+    error(code, metadata) {
+      console.error("[NextAuth Error]", code, metadata);
+    },
+    warn(code) {
+      console.warn("[NextAuth Warning]", code);
+    },
+    debug(code, metadata) {
+      console.log("[NextAuth Debug]", code, metadata);
+    },
+  },
   pages: {
     signIn: "/auth/signin",
     error: "/auth/error",
   },
-  debug: process.env.NODE_ENV === "development",
+  debug: true, // 프로덕션에서도 디버그 활성화
 };
