@@ -33,11 +33,10 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30일
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       console.log("[NextAuth] signIn callback:", {
         userId: user?.id,
         provider: account?.provider,
-        profileId: profile?.id,
       });
       return true;
     },
