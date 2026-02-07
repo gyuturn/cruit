@@ -1,0 +1,41 @@
+name: Crawl Jobs (Batch)
+
+on:
+  # 매 시간 실행 (UTC 기준)
+  schedule:
+    - cron: '0 * * * *'
+  # 수동 실행 지원
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    environment: prd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Crawler
+        run: npx tsx scripts/crawl-jobs.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Report Status
+        if: always()
+        run: |
+          echo "Crawl job completed at $(date)"
+          echo "Status: ${{ job.status }}"

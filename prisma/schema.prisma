@@ -175,3 +175,60 @@ model AIFeedback {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 채용공고 (배치 크롤링 데이터)
+// ═══════════════════════════════════════════════════════════════
+
+model JobPosting {
+  id              String    @id @default(cuid())
+  externalId      String    // 원본 사이트 ID (예: saramin_12345)
+  source          String    // saramin, jobkorea, wanted, jumpit, incruit
+  title           String
+  company         String
+  location        String?
+  experienceLevel String?   // 신입, 경력, 신입/경력
+  education       String?
+  skills          String[]  // 기술 스택, 자격 요건
+  salary          String?
+  deadline        String?   // 마감일
+  url             String    // 원본 공고 URL
+  summary         String?   @db.Text
+
+  // 메타데이터
+  crawledAt       DateTime  @default(now())  // 크롤링 시점
+  updatedAt       DateTime  @updatedAt
+  isActive        Boolean   @default(true)   // 공고 활성 상태
+
+  // AI 고도화용 필드 (추후 사용)
+  embedding       Float[]   @default([]) // 공고 임베딩 벡터 (OpenAI)
+  category        String?   // 직군 카테고리
+  keywords        String[]  @default([]) // 추출된 키워드
+
+  @@unique([source, externalId])
+  @@index([source])
+  @@index([crawledAt])
+  @@index([isActive])
+  @@index([company])
+  @@index([experienceLevel])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 크롤링 실행 기록
+// ═══════════════════════════════════════════════════════════════
+
+model CrawlLog {
+  id          String   @id @default(cuid())
+  source      String   // 크롤링 소스 (saramin, all 등)
+  status      String   // success, failed, partial
+  jobsFound   Int      // 발견된 공고 수
+  jobsCreated Int      // 신규 저장된 공고 수
+  jobsUpdated Int      // 업데이트된 공고 수
+  duration    Int      // 소요 시간 (ms)
+  errorMsg    String?  @db.Text
+  startedAt   DateTime
+  finishedAt  DateTime @default(now())
+
+  @@index([source])
+  @@index([finishedAt])
+}
