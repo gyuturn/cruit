@@ -5,6 +5,7 @@ import { crawlWanted } from './wanted';
 import { crawlJumpit } from './jumpit';
 import { crawlIncruit } from './incruit';
 import { filterAndMarkSeenJobs } from '../dedup';
+import { prisma } from '../prisma';
 
 // 크롤링 소스 타입
 export type CrawlSource = 'saramin' | 'jobkorea' | 'wanted' | 'jumpit' | 'incruit' | 'all';
@@ -365,7 +366,72 @@ async function crawlWithKeyword(
   return results.flat();
 }
 
-// 공고 데이터 가져오기 (다중 키워드 병렬 크롤링 + 중복 제거)
+// DB에서 공고 조회 (배치 크롤링 데이터)
+async function fetchJobsFromDb(
+  profile?: UserProfile,
+  source?: CrawlSource
+): Promise<JobPosting[]> {
+  try {
+    const keywords = generateSearchKeywords(profile);
+    const experienceLevel = profile?.experienceLevel;
+
+    // Prisma where 조건 구성
+    const where: Record<string, unknown> = {
+      isActive: true,
+    };
+
+    // 소스 필터
+    if (source && source !== 'all') {
+      where.source = source;
+    }
+
+    // 키워드 기반 OR 검색 (제목, 회사명, 스킬에서 검색)
+    if (keywords.length > 0) {
+      where.OR = keywords.flatMap(keyword => [
+        { title: { contains: keyword, mode: 'insensitive' } },
+        { company: { contains: keyword, mode: 'insensitive' } },
+        { skills: { hasSome: [keyword] } },
+      ]);
+    }
+
+    // 경력 필터 (신입이면 '신입' 포함 공고)
+    if (experienceLevel === 'junior') {
+      where.OR = [
+        ...(where.OR as Array<Record<string, unknown>> || []),
+        { experienceLevel: { contains: '신입', mode: 'insensitive' } },
+        { experienceLevel: null },
+      ];
+    }
+
+    const dbJobs = await prisma.jobPosting.findMany({
+      where,
+      orderBy: { crawledAt: 'desc' },
+      take: 100, // 최대 100건
+    });
+
+    // Prisma 모델 → TypeScript JobPosting 인터페이스 매핑
+    return dbJobs.map(job => ({
+      id: job.externalId,
+      title: job.title,
+      company: job.company,
+      location: job.location || '미정',
+      experienceLevel: job.experienceLevel || '미정',
+      education: job.education || '',
+      skills: job.skills,
+      salary: job.salary || '',
+      deadline: job.deadline || '',
+      url: job.url,
+      source: job.source,
+      summary: job.summary || '',
+      createdAt: job.crawledAt.toISOString(),
+    }));
+  } catch (error) {
+    console.error('DB 조회 실패:', error);
+    return [];
+  }
+}
+
+// 공고 데이터 가져오기 (DB 우선 → 실시간 크롤링 폴백)
 export async function fetchJobs(
   source: CrawlSource = 'all',
   profile?: UserProfile,
@@ -377,22 +443,42 @@ export async function fetchJobs(
   console.log(`Fetching jobs with keywords: [${keywords.join(', ')}], experience: ${experienceLevel}`);
   console.log(`Profile major: ${profile?.major || 'not set'}`);
 
+  // 1단계: DB에서 먼저 조회 시도
+  const dbJobs = await fetchJobsFromDb(profile, source);
+  if (dbJobs.length >= 5) {
+    console.log(`DB에서 ${dbJobs.length}건 조회 성공 (실시간 크롤링 스킵)`);
+
+    if (!skipDedup) {
+      const filteredJobs = filterAndMarkSeenJobs(dbJobs);
+      console.log(`After dedup filter: ${filteredJobs.length}`);
+
+      if (filteredJobs.length < 5 && dbJobs.length >= 5) {
+        console.log('Too few new jobs, including some seen jobs');
+        return dbJobs.slice(0, 20);
+      }
+
+      return filteredJobs;
+    }
+
+    return dbJobs;
+  }
+
+  console.log(`DB 결과 부족 (${dbJobs.length}건), 실시간 크롤링으로 폴백`);
+
+  // 2단계: DB 결과 부족 시 실시간 크롤링 폴백
   let allJobs: JobPosting[] = [];
 
   try {
-    // 각 키워드별로 병렬 크롤링 실행
     const keywordPromises = keywords.map(keyword =>
       crawlWithKeyword(keyword, source, experienceLevel)
     );
 
     const keywordResults = await Promise.all(keywordPromises);
 
-    // 키워드별 결과 로깅
     keywords.forEach((keyword, index) => {
       console.log(`  "${keyword}": ${keywordResults[index].length} jobs`);
     });
 
-    // 모든 결과 병합
     keywordResults.forEach(jobs => {
       allJobs = [...allJobs, ...jobs];
     });
@@ -403,16 +489,13 @@ export async function fetchJobs(
       return SAMPLE_JOBS;
     }
 
-    // 동일 크롤링 내 중복 제거 (회사명 + 제목 기준)
     const uniqueJobs = removeDuplicates(allJobs);
     console.log(`Total unique jobs from crawling: ${uniqueJobs.length}`);
 
-    // AI 재추천 시 이전에 본 공고 제거 (skipDedup이 false일 때)
     if (!skipDedup) {
       const filteredJobs = filterAndMarkSeenJobs(uniqueJobs);
       console.log(`After dedup filter: ${filteredJobs.length}`);
 
-      // 필터링 후 공고가 너무 적으면 일부 기존 공고 포함
       if (filteredJobs.length < 5 && uniqueJobs.length >= 5) {
         console.log('Too few new jobs, including some seen jobs');
         return uniqueJobs.slice(0, 20);

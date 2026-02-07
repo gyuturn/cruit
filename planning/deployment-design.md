@@ -190,34 +190,36 @@ main push ──► Lint ──► Test ──► Production 배포
 ### 6.2 필요한 환경 변수
 
 ```bash
-# API
-NEXT_PUBLIC_API_URL=https://api.example.com
-
-# Database (Supabase)
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJxxx
-SUPABASE_SERVICE_KEY=eyJxxx  # 서버 전용
+# Database (Supabase + Prisma)
+DATABASE_URL=postgresql://...?pgbouncer=true  # Pooling 연결
+DIRECT_URL=postgresql://...                    # 직접 연결 (마이그레이션용)
 
 # AI (OpenAI)
 OPENAI_API_KEY=sk-xxx
 
-# 크롤링 설정
-CRAWL_INTERVAL=3600000  # 1시간
+# 인증 (NextAuth)
+NEXTAUTH_SECRET=xxx
+NEXTAUTH_URL=http://localhost:3000
+KAKAO_CLIENT_ID=xxx
+KAKAO_CLIENT_SECRET=xxx
 ```
 
 ### 6.3 시크릿 관리
 
 ```
-GitHub Secrets (CI/CD용)
+GitHub Secrets (CI/CD + 배치 크롤링용)
+├── DATABASE_URL          # Prisma DB 연결
+├── DIRECT_URL            # Prisma 직접 연결
 ├── VERCEL_TOKEN
-├── SUPABASE_URL
-├── SUPABASE_SERVICE_KEY
 └── OPENAI_API_KEY
 
 Vercel Environment Variables (런타임용)
-├── SUPABASE_URL
-├── SUPABASE_ANON_KEY
-├── SUPABASE_SERVICE_KEY
+├── DATABASE_URL
+├── DIRECT_URL
+├── NEXTAUTH_SECRET
+├── NEXTAUTH_URL
+├── KAKAO_CLIENT_ID
+├── KAKAO_CLIENT_SECRET
 └── OPENAI_API_KEY
 ```
 
@@ -228,21 +230,30 @@ cruit/
 ├── .github/
 │   └── workflows/
 │       ├── deploy.yml        # 배포 워크플로우
-│       ├── test.yml          # 테스트 워크플로우
-│       └── cron-crawl.yml    # 크롤링 스케줄
+│       ├── ci.yml            # CI (린트/빌드)
+│       └── crawl-jobs.yml    # 배치 크롤링 (매 시간)
+├── scripts/
+│   └── crawl-jobs.ts         # 배치 크롤링 스크립트
+├── prisma/
+│   └── schema.prisma         # DB 스키마 (Prisma)
 ├── src/
 │   ├── app/                  # Next.js App Router
 │   │   ├── api/              # API Routes (Serverless)
-│   │   │   ├── profile/
-│   │   │   ├── recommendations/
-│   │   │   └── crawl/
+│   │   │   ├── auth/         # NextAuth 인증
+│   │   │   ├── recommendations/ # AI 추천
+│   │   │   ├── jobs/         # 공고 조회 (DB)
+│   │   │   ├── crawl/        # 크롤링 트리거
+│   │   │   └── debug/        # 디버그
+│   │   ├── auth/             # 로그인/에러 페이지
 │   │   ├── page.tsx          # 메인 페이지
 │   │   └── layout.tsx
 │   ├── components/           # React 컴포넌트
 │   ├── lib/                  # 유틸리티
-│   │   ├── supabase.ts       # DB 클라이언트
-│   │   ├── crawler/          # 크롤링 모듈
-│   │   └── ai/               # AI 추천 모듈
+│   │   ├── prisma.ts         # Prisma 클라이언트 (싱글톤)
+│   │   ├── auth/             # NextAuth 설정
+│   │   ├── crawler/          # 크롤링 모듈 + DB 조회
+│   │   ├── ai/               # AI 추천 모듈
+│   │   └── dedup/            # 중복 제거
 │   └── types/                # TypeScript 타입
 ├── public/                   # 정적 파일
 ├── planning/                 # 설계 문서
@@ -270,27 +281,40 @@ cruit/
 | Push to `develop` | Preview |
 | PR 생성 | Preview (PR별 고유 URL) |
 
-### 8.3 크롤링 스케줄 (GitHub Actions)
+### 8.3 배치 크롤링 (GitHub Actions)
 
 ```yaml
-# .github/workflows/cron-crawl.yml
+# .github/workflows/crawl-jobs.yml
 
-name: Scheduled Crawl
+name: Crawl Jobs (Batch)
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # 6시간마다
-  workflow_dispatch:        # 수동 실행
+    - cron: '0 * * * *'  # 매 시간
+  workflow_dispatch:       # 수동 실행
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    environment: prd
     steps:
-      - name: Trigger Crawl API
-        run: |
-          curl -X POST ${{ secrets.API_URL }}/api/crawl \
-            -H "Authorization: Bearer ${{ secrets.CRAWL_SECRET }}"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Run Crawler
+        run: npx tsx scripts/crawl-jobs.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
 ```
+
+> 기존 API 트리거 방식에서 **직접 DB 저장 방식**으로 변경됨.
+> 크롤링 결과는 `JobPosting` 테이블에 upsert되며,
+> API 요청 시 DB 조회 (< 500ms)로 응답합니다.
 
 ## 9. 모니터링 (무료)
 
