@@ -30,23 +30,61 @@
 AI 기반 취업 추천 시스템 - 한국 구직자를 위한 맞춤형 채용공고 추천
 
 ## 기술 스택
-- **Frontend**: Next.js 16, React, TypeScript, Tailwind CSS
+- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes (Serverless)
 - **AI**: OpenAI GPT-3.5-turbo
+- **DB**: PostgreSQL (Supabase) + Prisma ORM
 - **Crawling**: Cheerio (사람인, 잡코리아, 인크루트), API (원티드, 점핏)
-- **Storage**: LocalStorage (클라이언트), File-based (서버)
+- **배치 시스템**: GitHub Actions (매 시간 자동 크롤링 → DB 저장)
+- **인증**: NextAuth.js (카카오 로그인)
+- **Storage**: PostgreSQL (서버), LocalStorage (클라이언트)
 
 ## 디렉토리 구조
 ```
-src/
-├── app/           # Next.js App Router
-├── components/    # React 컴포넌트
-├── lib/
-│   ├── ai/        # AI 추천 로직
-│   ├── crawler/   # 크롤러 (5개 사이트)
-│   ├── dedup/     # 중복 제거
-│   └── storage.ts # 스토리지 유틸
-└── types/         # TypeScript 타입
+cruit/
+├── .github/workflows/
+│   ├── crawl-jobs.yml    # 배치 크롤링 (매 시간)
+│   ├── deploy.yml        # 배포
+│   └── ci.yml            # CI
+├── scripts/
+│   └── crawl-jobs.ts     # 배치 크롤링 스크립트
+├── prisma/
+│   └── schema.prisma     # DB 스키마
+├── src/
+│   ├── app/
+│   │   └── api/
+│   │       ├── recommendations/  # AI 추천 API
+│   │       ├── jobs/             # 공고 조회 API (DB)
+│   │       ├── auth/             # 인증
+│   │       └── crawl/            # 크롤링 트리거
+│   ├── components/       # React 컴포넌트
+│   ├── lib/
+│   │   ├── ai/           # AI 추천 로직
+│   │   ├── crawler/      # 크롤러 (5개 사이트) + DB 조회
+│   │   ├── dedup/        # 중복 제거
+│   │   ├── auth/         # NextAuth 설정
+│   │   ├── prisma.ts     # Prisma 클라이언트
+│   │   └── storage.ts    # 클라이언트 스토리지
+│   └── types/            # TypeScript 타입
+└── planning/             # 설계 문서
 ```
+
+## 데이터 흐름
+```
+[배치 크롤링 - GitHub Actions 매 시간]
+  → 사람인/원티드/점핏 크롤링 → DB 저장 (JobPosting)
+
+[사용자 요청]
+  → DB 조회 (< 500ms) → AI 매칭 → 추천 결과
+  → DB 부족 시 실시간 크롤링 폴백
+```
+
+## API 엔드포인트
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/recommendations` | AI 추천 (프로필 기반) |
+| GET | `/api/jobs` | 공고 목록 (필터: source, keyword, experienceLevel) |
+| POST | `/api/crawl` | 수동 크롤링 트리거 |
 
 ---
 
