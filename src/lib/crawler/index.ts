@@ -431,7 +431,9 @@ async function fetchJobsFromDb(
   }
 }
 
-// 공고 데이터 가져오기 (DB 우선 → 실시간 크롤링 폴백)
+// 공고 데이터 가져오기 (DB 전용 - 크롤링 비활성화)
+// ⚠️ 실시간 크롤링 폴백 제거 (Issue #15 - 법적 리스크)
+// 향후 공식 API 연동으로 대체 예정
 export async function fetchJobs(
   source: CrawlSource = 'all',
   profile?: UserProfile,
@@ -443,10 +445,11 @@ export async function fetchJobs(
   console.log(`Fetching jobs with keywords: [${keywords.join(', ')}], experience: ${experienceLevel}`);
   console.log(`Profile major: ${profile?.major || 'not set'}`);
 
-  // 1단계: DB에서 먼저 조회 시도
+  // DB에서 조회 (실시간 크롤링 폴백 제거)
   const dbJobs = await fetchJobsFromDb(profile, source);
-  if (dbJobs.length >= 5) {
-    console.log(`DB에서 ${dbJobs.length}건 조회 성공 (실시간 크롤링 스킵)`);
+
+  if (dbJobs.length > 0) {
+    console.log(`DB에서 ${dbJobs.length}건 조회 성공`);
 
     if (!skipDedup) {
       const filteredJobs = filterAndMarkSeenJobs(dbJobs);
@@ -463,52 +466,9 @@ export async function fetchJobs(
     return dbJobs;
   }
 
-  console.log(`DB 결과 부족 (${dbJobs.length}건), 실시간 크롤링으로 폴백`);
-
-  // 2단계: DB 결과 부족 시 실시간 크롤링 폴백
-  let allJobs: JobPosting[] = [];
-
-  try {
-    const keywordPromises = keywords.map(keyword =>
-      crawlWithKeyword(keyword, source, experienceLevel)
-    );
-
-    const keywordResults = await Promise.all(keywordPromises);
-
-    keywords.forEach((keyword, index) => {
-      console.log(`  "${keyword}": ${keywordResults[index].length} jobs`);
-    });
-
-    keywordResults.forEach(jobs => {
-      allJobs = [...allJobs, ...jobs];
-    });
-
-    // 크롤링 결과가 없으면 샘플 데이터 사용
-    if (allJobs.length === 0) {
-      console.log('No crawled jobs, using sample data');
-      return SAMPLE_JOBS;
-    }
-
-    const uniqueJobs = removeDuplicates(allJobs);
-    console.log(`Total unique jobs from crawling: ${uniqueJobs.length}`);
-
-    if (!skipDedup) {
-      const filteredJobs = filterAndMarkSeenJobs(uniqueJobs);
-      console.log(`After dedup filter: ${filteredJobs.length}`);
-
-      if (filteredJobs.length < 5 && uniqueJobs.length >= 5) {
-        console.log('Too few new jobs, including some seen jobs');
-        return uniqueJobs.slice(0, 20);
-      }
-
-      return filteredJobs;
-    }
-
-    return uniqueJobs;
-  } catch (error) {
-    console.error('Crawl error, using sample data:', error);
-    return SAMPLE_JOBS;
-  }
+  // DB에 데이터가 없으면 샘플 데이터 반환
+  console.log('DB 결과 없음, 샘플 데이터 사용 (크롤링 비활성화 상태)');
+  return SAMPLE_JOBS;
 }
 
 // 중복 제거 (같은 크롤링 내에서)
