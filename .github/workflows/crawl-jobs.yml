@@ -1,11 +1,22 @@
-name: Crawl Jobs (Batch)
+name: Crawl Jobs (Batch) [DISABLED]
+
+# ⚠️ 크롤링 시스템 중단 (Issue #15)
+# 법적 리스크로 인해 비활성화 - 공식 API 전환 예정
+# 재활성화 시 아래 주석 해제
+#
+# on:
+#   schedule:
+#     - cron: '0 * * * *'
+#   workflow_dispatch:
 
 on:
-  # 매 시간 실행 (UTC 기준)
-  schedule:
-    - cron: '0 * * * *'
-  # 수동 실행 지원
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: '⚠️ 크롤링은 법적 리스크로 중단되었습니다. 정말 실행하시겠습니까?'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   crawl:
@@ -29,7 +40,11 @@ jobs:
         run: npx prisma generate
 
       - name: Run Crawler
-        run: npx tsx scripts/crawl-jobs.ts
+        if: ${{ github.event.inputs.confirm == 'true' }}
+        run: |
+          echo "⚠️ 크롤링 시스템은 법적 리스크로 중단되었습니다 (Issue #15)"
+          echo "공식 API 전환이 완료될 때까지 크롤링을 실행하지 않습니다."
+          exit 0
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
