@@ -8,7 +8,7 @@ import { filterAndMarkSeenJobs } from '../dedup';
 import { prisma } from '../prisma';
 
 // 크롤링 소스 타입
-export type CrawlSource = 'saramin' | 'jobkorea' | 'wanted' | 'jumpit' | 'incruit' | 'all';
+export type CrawlSource = 'saramin' | 'jobkorea' | 'wanted' | 'jumpit' | 'incruit' | 'worknet' | 'all';
 
 // 샘플 데이터 (크롤링 실패 시 fallback)
 const SAMPLE_JOBS: JobPosting[] = [
