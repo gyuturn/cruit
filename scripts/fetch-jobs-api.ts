@@ -94,7 +94,12 @@ async function fetchRecruitmentPage(
     throw new Error(`API 에러: ${data.resultMsg}`);
   }
 
-  return { items: data.result || [], totalCount: data.totalCount };
+  // 모집중인 공고만 필터링
+  const ongoingItems = (data.result || []).filter(
+    (item) => item.ongoingYn === "Y"
+  );
+
+  return { items: ongoingItems, totalCount: data.totalCount };
 }
 
 function mapToJobData(item: RecruitmentItem): JobData {
