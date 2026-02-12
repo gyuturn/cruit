@@ -1,6 +1,6 @@
 name: Fetch Jobs via API (Batch)
 
-# 워크넷 공공데이터 API를 통한 채용공고 수집
+# 공공기관 채용정보 API(data.go.kr)를 통한 채용공고 수집
 # Issue #18 - 크롤링(#15) 대신 공식 API 사용
 
 on:
@@ -31,12 +31,12 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Fetch Jobs from Worknet API
+      - name: Fetch Jobs from Recruitment API
         run: npx tsx scripts/fetch-jobs-api.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          WORKNET_API_KEY: ${{ secrets.WORKNET_API_KEY }}
+          RECRUITMENT_API_KEY: ${{ secrets.RECRUITMENT_API_KEY }}
 
       - name: Report Status
         if: always()

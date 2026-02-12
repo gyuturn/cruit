@@ -1,37 +1,46 @@
 /**
- * 워크넷(고용24) 공공데이터 API 배치 수집 스크립트
- * - 워크넷 API로 채용공고를 수집하여 DB에 저장
+ * 공공기관 채용정보 API 배치 수집 스크립트 (data.go.kr)
+ * - 공공기관 채용정보 API로 채용공고를 수집하여 DB에 저장
  * - GitHub Actions 또는 수동으로 실행
  *
  * 실행 방법:
- *   WORKNET_API_KEY=13832447-... npx tsx scripts/fetch-jobs-api.ts
+ *   RECRUITMENT_API_KEY=oH7zNp4n... npx tsx scripts/fetch-jobs-api.ts
  *
- * 사전 준비:
- *   고용24(work24.go.kr) > 고객센터 > OPEN-API > 채용정보 서비스 신청 필요
+ * API: https://apis.data.go.kr/1051000/recruitment/list
+ * 트래픽: 일 1,000건
  */
 
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// ─── 워크넷 API 클라이언트 (인라인) ───────────────────────────
+// ─── API 클라이언트 (인라인) ──────────────────────────────────
 // scripts/ 폴더는 tsconfig에서 제외되므로 @/ 경로를 사용할 수 없어 인라인으로 구현
 
-const WORKNET_API_URL =
-  "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do";
+const API_BASE = "https://apis.data.go.kr/1051000/recruitment";
 
-interface WorknetJobRaw {
-  wantedAuthNo: string;
-  company: string;
-  title: string;
-  sal: string;
-  region: string;
-  career: string; // N=신입, E=경력, Z=관계없음
-  minEdubg: string;
-  maxEdubg: string;
-  closeDt: string;
-  wantedInfoUrl: string;
-  basicAddr: string;
+interface RecruitmentItem {
+  recrutPblntSn: number;
+  instNm: string;
+  recrutPbancTtl: string;
+  hireTypeNmLst: string;
+  workRgnNmLst: string;
+  recrutSeNm: string;
+  ncsCdNmLst: string;
+  acbgCondNmLst: string;
+  recrutNope: number;
+  pbancBgngYmd: string;
+  pbancEndYmd: string;
+  srcUrl: string;
+  ongoingYn: string;
+  prefCondCn: string;
+}
+
+interface ApiResponse {
+  resultCode: number;
+  resultMsg: string;
+  totalCount: number;
+  result: RecruitmentItem[];
 }
 
 interface JobData {
@@ -49,149 +58,65 @@ interface JobData {
   summary?: string;
 }
 
-function mapCareer(career: string): string {
-  switch (career?.trim()) {
-    case "N":
-      return "신입";
-    case "E":
-      return "경력";
-    case "Z":
-      return "무관";
-    default:
-      return career || "미정";
-  }
+function formatDate(yyyymmdd: string): string {
+  if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || "";
+  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
 
-function formatEducation(minEdubg: string, maxEdubg: string): string {
-  const eduMap: Record<string, string> = {
-    "00": "학력무관",
-    "01": "초졸이하",
-    "02": "중졸",
-    "03": "고졸",
-    "04": "대졸(2~3년)",
-    "05": "대졸(4년)",
-    "06": "석사",
-    "07": "박사",
-  };
-  const min = eduMap[minEdubg];
-  const max = eduMap[maxEdubg];
-  if (!min && !max) return "";
-  if (min === max || !max) return min || "";
-  if (!min) return max;
-  return `${min} ~ ${max}`;
-}
-
-async function fetchWorknetJobs(
-  keyword: string,
-  startPage = 1,
-  display = 100
-): Promise<WorknetJobRaw[]> {
-  const apiKey = process.env.WORKNET_API_KEY;
+async function fetchRecruitmentPage(
+  pageNo: number,
+  numOfRows: number
+): Promise<{ items: RecruitmentItem[]; totalCount: number }> {
+  const apiKey = process.env.RECRUITMENT_API_KEY;
   if (!apiKey) {
-    throw new Error("WORKNET_API_KEY 환경변수가 설정되지 않았습니다.");
+    throw new Error("RECRUITMENT_API_KEY 환경변수가 설정되지 않았습니다.");
   }
 
   const params = new URLSearchParams({
-    authKey: apiKey,
-    callTp: "L",
-    returnType: "XML",
-    startPage: String(startPage),
-    display: String(display),
-    keyword,
+    serviceKey: apiKey,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
   });
 
-  const url = `${WORKNET_API_URL}?${params.toString()}`;
+  const url = `${API_BASE}/list?${params.toString()}`;
 
   const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Cruit/1.0 (Job Recommendation Service)",
-    },
+    headers: { Accept: "application/json" },
   });
 
   if (!response.ok) {
-    throw new Error(`워크넷 API 요청 실패: ${response.status}`);
+    throw new Error(`API 요청 실패: ${response.status}`);
   }
 
-  const xml = await response.text();
+  const data: ApiResponse = await response.json();
 
-  // 에러 응답 체크
-  if (xml.includes("<error>") || xml.includes("<messageCd>")) {
-    const errorMatch = xml.match(/<error>([^<]+)<\/error>/);
-    const msgMatch = xml.match(/<message>([^<]+)<\/message>/);
-    throw new Error(
-      `워크넷 API 에러: ${errorMatch?.[1] || msgMatch?.[1] || "알 수 없는 에러"}`
-    );
+  if (data.resultCode !== 200) {
+    throw new Error(`API 에러: ${data.resultMsg}`);
   }
 
-  return parseWorknetXml(xml);
+  return { items: data.result || [], totalCount: data.totalCount };
 }
 
-function parseWorknetXml(xml: string): WorknetJobRaw[] {
-  const jobs: WorknetJobRaw[] = [];
-  const wantedBlocks = xml.match(/<wanted>([\s\S]*?)<\/wanted>/g) || [];
-
-  for (const block of wantedBlocks) {
-    const getText = (tag: string): string => {
-      const match = block.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
-      return match ? match[1].trim() : "";
-    };
-
-    const wantedAuthNo = getText("wantedAuthNo");
-    const title = getText("title");
-
-    if (wantedAuthNo && title) {
-      jobs.push({
-        wantedAuthNo,
-        company: getText("company"),
-        title,
-        sal: getText("sal"),
-        region: getText("region"),
-        career: getText("career"),
-        minEdubg: getText("minEdubg"),
-        maxEdubg: getText("maxEdubg"),
-        closeDt: getText("closeDt"),
-        wantedInfoUrl: getText("wantedInfoUrl"),
-        basicAddr: getText("basicAddr"),
-      });
-    }
-  }
-
-  return jobs;
-}
-
-function mapToJobData(raw: WorknetJobRaw): JobData {
+function mapToJobData(item: RecruitmentItem): JobData {
   return {
-    id: `worknet_${raw.wantedAuthNo}`,
-    title: raw.title,
-    company: raw.company,
-    location: raw.region || raw.basicAddr || "미정",
-    experienceLevel: mapCareer(raw.career),
-    education: formatEducation(raw.minEdubg, raw.maxEdubg),
-    skills: [],
-    salary: raw.sal || "",
-    deadline: raw.closeDt || "",
-    url:
-      raw.wantedInfoUrl ||
-      `https://www.work24.go.kr/wk/a/b/1200/dtlReqstView.do?wantedAuthNo=${raw.wantedAuthNo}`,
-    source: "worknet",
-    summary: "",
+    id: `recruitment_${item.recrutPblntSn}`,
+    title: item.recrutPbancTtl,
+    company: item.instNm,
+    location: item.workRgnNmLst || "미정",
+    experienceLevel: item.recrutSeNm || "미정",
+    education: item.acbgCondNmLst || "",
+    skills: item.ncsCdNmLst
+      ? item.ncsCdNmLst.split(",").map((s) => s.trim())
+      : [],
+    salary: "",
+    deadline: formatDate(item.pbancEndYmd),
+    url: item.srcUrl?.startsWith("http")
+      ? item.srcUrl
+      : `https://${item.srcUrl}`,
+    source: "recruitment",
+    summary: item.prefCondCn || "",
   };
 }
-
-// ─── 검색 키워드 ──────────────────────────────────────────────
-
-const SEARCH_KEYWORDS = [
-  "백엔드 개발자",
-  "프론트엔드 개발자",
-  "풀스택 개발자",
-  "데이터 엔지니어",
-  "AI 엔지니어",
-  "DevOps",
-  "신입 개발자",
-  "IT 엔지니어",
-  "소프트웨어 엔지니어",
-  "앱 개발자",
-];
 
 // ─── DB 저장 (upsert) ────────────────────────────────────────
 
@@ -301,34 +226,50 @@ async function saveCrawlLog(
 
 async function main() {
   console.log("=".repeat(60));
-  console.log("워크넷 API 배치 수집 시작");
+  console.log("공공기관 채용정보 API 배치 수집 시작");
   console.log(`시작 시간: ${new Date().toISOString()}`);
   console.log("=".repeat(60));
 
   const startTime = Date.now();
   const allJobs: JobData[] = [];
-  let totalFound = 0;
+  const NUM_OF_ROWS = 100;
+  const MAX_PAGES = 10; // 일일 트래픽 1,000건 제한 고려 (100 * 10 = 1,000)
 
-  for (const keyword of SEARCH_KEYWORDS) {
-    console.log(`\n[키워드: ${keyword}]`);
+  // 페이지별 수집
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    console.log(`\n[페이지 ${page}/${MAX_PAGES}]`);
 
     try {
-      const rawJobs = await fetchWorknetJobs(keyword);
-      const jobs = rawJobs.map(mapToJobData);
+      const { items, totalCount } = await fetchRecruitmentPage(
+        page,
+        NUM_OF_ROWS
+      );
+
+      if (page === 1) {
+        console.log(`  총 공고 수: ${totalCount.toLocaleString()}건`);
+      }
+
+      const jobs = items.map(mapToJobData);
       allJobs.push(...jobs);
-      totalFound += jobs.length;
-      console.log(`  [워크넷] "${keyword}": ${jobs.length}건`);
+      console.log(`  수집: ${items.length}건 (누적: ${allJobs.length}건)`);
+
+      // 마지막 페이지 도달
+      if (items.length < NUM_OF_ROWS) {
+        console.log("  마지막 페이지 도달");
+        break;
+      }
     } catch (error) {
-      console.error(`  [워크넷] "${keyword}" 에러:`, error);
+      console.error(`  [페이지 ${page}] 에러:`, error);
+      break;
     }
 
-    // Rate limiting (API 호출 간 1초 대기)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Rate limiting (API 호출 간 500ms 대기)
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   // 중복 제거
   console.log("\n" + "-".repeat(60));
-  console.log(`총 수집: ${totalFound}건`);
+  console.log(`총 수집: ${allJobs.length}건`);
   const uniqueJobs = deduplicateJobs(allJobs);
   console.log(`중복 제거 후: ${uniqueJobs.length}건`);
 
@@ -354,9 +295,9 @@ async function main() {
 
   // 크롤링 로그 저장
   await saveCrawlLog(
-    "worknet",
+    "recruitment",
     "success",
-    totalFound,
+    allJobs.length,
     created,
     updated,
     duration,
