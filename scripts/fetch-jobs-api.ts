@@ -1,10 +1,13 @@
 /**
- * 워크넷 공공데이터 API 배치 수집 스크립트
+ * 워크넷(고용24) 공공데이터 API 배치 수집 스크립트
  * - 워크넷 API로 채용공고를 수집하여 DB에 저장
  * - GitHub Actions 또는 수동으로 실행
  *
  * 실행 방법:
- *   WORKNET_API_KEY=... npx tsx scripts/fetch-jobs-api.ts
+ *   WORKNET_API_KEY=13832447-... npx tsx scripts/fetch-jobs-api.ts
+ *
+ * 사전 준비:
+ *   고용24(work24.go.kr) > 고객센터 > OPEN-API > 채용정보 서비스 신청 필요
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -23,10 +26,12 @@ interface WorknetJobRaw {
   title: string;
   sal: string;
   region: string;
-  career: string;
-  education: string;
+  career: string; // N=신입, E=경력, Z=관계없음
+  minEdubg: string;
+  maxEdubg: string;
   closeDt: string;
   wantedInfoUrl: string;
+  basicAddr: string;
 }
 
 interface JobData {
@@ -55,6 +60,25 @@ function mapCareer(career: string): string {
     default:
       return career || "미정";
   }
+}
+
+function formatEducation(minEdubg: string, maxEdubg: string): string {
+  const eduMap: Record<string, string> = {
+    "00": "학력무관",
+    "01": "초졸이하",
+    "02": "중졸",
+    "03": "고졸",
+    "04": "대졸(2~3년)",
+    "05": "대졸(4년)",
+    "06": "석사",
+    "07": "박사",
+  };
+  const min = eduMap[minEdubg];
+  const max = eduMap[maxEdubg];
+  if (!min && !max) return "";
+  if (min === max || !max) return min || "";
+  if (!min) return max;
+  return `${min} ~ ${max}`;
 }
 
 async function fetchWorknetJobs(
@@ -89,13 +113,21 @@ async function fetchWorknetJobs(
   }
 
   const xml = await response.text();
+
+  // 에러 응답 체크
+  if (xml.includes("<error>") || xml.includes("<messageCd>")) {
+    const errorMatch = xml.match(/<error>([^<]+)<\/error>/);
+    const msgMatch = xml.match(/<message>([^<]+)<\/message>/);
+    throw new Error(
+      `워크넷 API 에러: ${errorMatch?.[1] || msgMatch?.[1] || "알 수 없는 에러"}`
+    );
+  }
+
   return parseWorknetXml(xml);
 }
 
 function parseWorknetXml(xml: string): WorknetJobRaw[] {
-  // cheerio는 scripts/에서 직접 import하기 어려울 수 있으므로 정규식으로 파싱
   const jobs: WorknetJobRaw[] = [];
-
   const wantedBlocks = xml.match(/<wanted>([\s\S]*?)<\/wanted>/g) || [];
 
   for (const block of wantedBlocks) {
@@ -115,9 +147,11 @@ function parseWorknetXml(xml: string): WorknetJobRaw[] {
         sal: getText("sal"),
         region: getText("region"),
         career: getText("career"),
-        education: getText("education"),
+        minEdubg: getText("minEdubg"),
+        maxEdubg: getText("maxEdubg"),
         closeDt: getText("closeDt"),
         wantedInfoUrl: getText("wantedInfoUrl"),
+        basicAddr: getText("basicAddr"),
       });
     }
   }
@@ -130,9 +164,9 @@ function mapToJobData(raw: WorknetJobRaw): JobData {
     id: `worknet_${raw.wantedAuthNo}`,
     title: raw.title,
     company: raw.company,
-    location: raw.region || "미정",
+    location: raw.region || raw.basicAddr || "미정",
     experienceLevel: mapCareer(raw.career),
-    education: raw.education || "",
+    education: formatEducation(raw.minEdubg, raw.maxEdubg),
     skills: [],
     salary: raw.sal || "",
     deadline: raw.closeDt || "",
