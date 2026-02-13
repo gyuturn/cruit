@@ -291,7 +291,7 @@ export default function Home() {
                   <span className="text-blue-500">✓</span> 전공 기반 맞춤 추천
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-blue-500">✓</span> 5개 사이트 통합 검색
+                  <span className="text-blue-500">✓</span> 공공기관 채용정보 연동
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-blue-500">✓</span> AI 학습으로 추천 개선
