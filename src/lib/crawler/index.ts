@@ -366,6 +366,39 @@ async function crawlWithKeyword(
   return results.flat();
 }
 
+// Prisma 모델 → TypeScript JobPosting 인터페이스 매핑
+function mapDbJobToJobPosting(job: {
+  externalId: string;
+  title: string;
+  company: string;
+  location: string | null;
+  experienceLevel: string | null;
+  education: string | null;
+  skills: string[];
+  salary: string | null;
+  deadline: string | null;
+  url: string;
+  source: string;
+  summary: string | null;
+  crawledAt: Date;
+}): JobPosting {
+  return {
+    id: job.externalId,
+    title: job.title,
+    company: job.company,
+    location: job.location || '미정',
+    experienceLevel: job.experienceLevel || '미정',
+    education: job.education || '',
+    skills: job.skills,
+    salary: job.salary || '',
+    deadline: job.deadline || '',
+    url: job.url,
+    source: job.source,
+    summary: job.summary || '',
+    createdAt: job.crawledAt.toISOString(),
+  };
+}
+
 // DB에서 공고 조회 (배치 크롤링 데이터)
 async function fetchJobsFromDb(
   profile?: UserProfile,
@@ -406,25 +439,32 @@ async function fetchJobsFromDb(
     const dbJobs = await prisma.jobPosting.findMany({
       where,
       orderBy: { crawledAt: 'desc' },
-      take: 100, // 최대 100건
+      take: 100,
     });
 
-    // Prisma 모델 → TypeScript JobPosting 인터페이스 매핑
-    return dbJobs.map(job => ({
-      id: job.externalId,
-      title: job.title,
-      company: job.company,
-      location: job.location || '미정',
-      experienceLevel: job.experienceLevel || '미정',
-      education: job.education || '',
-      skills: job.skills,
-      salary: job.salary || '',
-      deadline: job.deadline || '',
-      url: job.url,
-      source: job.source,
-      summary: job.summary || '',
-      createdAt: job.crawledAt.toISOString(),
-    }));
+    // 키워드 매칭 결과가 부족하면 전체 활성 공고로 폴백
+    if (dbJobs.length < 5) {
+      console.log(`키워드 매칭 결과 부족 (${dbJobs.length}건), 전체 활성 공고 조회`);
+      const sourceFilter: Record<string, unknown> = { isActive: true };
+      if (source && source !== 'all') {
+        sourceFilter.source = source;
+      }
+
+      const allActiveJobs = await prisma.jobPosting.findMany({
+        where: sourceFilter,
+        orderBy: { crawledAt: 'desc' },
+        take: 100,
+      });
+
+      // 키워드 매칭된 공고를 우선 배치하고 나머지를 추가
+      const matchedIds = new Set(dbJobs.map(j => j.id));
+      const remaining = allActiveJobs.filter(j => !matchedIds.has(j.id));
+      const combined = [...dbJobs, ...remaining].slice(0, 100);
+
+      return combined.map(mapDbJobToJobPosting);
+    }
+
+    return dbJobs.map(mapDbJobToJobPosting);
   } catch (error) {
     console.error('DB 조회 실패:', error);
     return [];
