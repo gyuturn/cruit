@@ -210,6 +210,7 @@ export default function Home() {
   };
 
   // 즐겨찾기 삭제 핸들러
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleFavoriteRemove = (_jobId: string) => {
     setFavorites(getFavorites());
   };

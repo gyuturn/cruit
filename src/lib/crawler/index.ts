@@ -1,5 +1,4 @@
 import { JobPosting, UserProfile } from '@/types';
-import { filterAndMarkSeenJobs } from '../dedup';
 import { prisma } from '../prisma';
 
 // 데이터 소스 타입 (크롤러 비활성화 후 공공API만 사용)
@@ -371,7 +370,6 @@ async function fetchJobsFromDb(
 export async function fetchJobs(
   source: CrawlSource = 'all',
   profile?: UserProfile,
-  skipDedup: boolean = false
 ): Promise<JobPosting[]> {
   const keywords = generateSearchKeywords(profile);
   const experienceLevel = profile?.experienceLevel;
@@ -383,19 +381,6 @@ export async function fetchJobs(
 
   if (dbJobs.length > 0) {
     console.log(`DB에서 ${dbJobs.length}건 조회 성공`);
-
-    if (!skipDedup) {
-      const filteredJobs = filterAndMarkSeenJobs(dbJobs);
-      console.log(`After dedup filter: ${filteredJobs.length}`);
-
-      if (filteredJobs.length < 5 && dbJobs.length >= 5) {
-        console.log('Too few new jobs, including some seen jobs');
-        return dbJobs.slice(0, 20);
-      }
-
-      return filteredJobs;
-    }
-
     return dbJobs;
   }
 
