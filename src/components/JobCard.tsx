@@ -83,26 +83,14 @@ export default function JobCard({ recommendation, onRatingChange, onFavoriteChan
         {/* 출처 표시 */}
         <div className="flex items-center gap-1">
           <span className={`px-2 py-0.5 rounded text-xs ${
-            jobPosting.source === 'saramin'
-              ? 'bg-blue-100 text-blue-700'
-              : jobPosting.source === 'jobkorea'
-              ? 'bg-green-100 text-green-700'
-              : jobPosting.source === 'recruitment'
+            jobPosting.source === 'recruitment'
               ? 'bg-purple-100 text-purple-700'
-              : jobPosting.source === 'wanted'
-              ? 'bg-teal-100 text-teal-700'
-              : jobPosting.source === 'jumpit'
-              ? 'bg-orange-100 text-orange-700'
-              : jobPosting.source === 'incruit'
-              ? 'bg-rose-100 text-rose-700'
+              : jobPosting.source === 'worknet'
+              ? 'bg-indigo-100 text-indigo-700'
               : 'bg-gray-100 text-gray-600'
           }`}>
-            {jobPosting.source === 'saramin' ? '사람인' :
-             jobPosting.source === 'jobkorea' ? '잡코리아' :
-             jobPosting.source === 'recruitment' ? '공공기관' :
-             jobPosting.source === 'wanted' ? '원티드' :
-             jobPosting.source === 'jumpit' ? '점핏' :
-             jobPosting.source === 'incruit' ? '인크루트' :
+            {jobPosting.source === 'recruitment' ? '공공기관' :
+             jobPosting.source === 'worknet' ? '워크넷' :
              jobPosting.source}
           </span>
         </div>

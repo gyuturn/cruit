@@ -11,6 +11,8 @@ import TabNavigation from '@/components/TabNavigation';
 import FavoritesList from '@/components/FavoritesList';
 import AIFeedbackModal from '@/components/AIFeedbackModal';
 import AuthButton from '@/components/AuthButton';
+import ExternalJobLinks from '@/components/ExternalJobLinks';
+import { generateSearchKeywords } from '@/lib/crawler';
 import { RotateCcw } from 'lucide-react';
 
 const PAGE_SIZE = 5;
@@ -323,15 +325,22 @@ export default function Home() {
 
             {/* 탭 콘텐츠 */}
             {activeTab === 'recommendations' ? (
-              <JobList
-                recommendations={recommendations}
-                onAILearn={handleAILearnAndRecommend}
-                onLoadMore={handleLoadMore}
-                onFavoriteChange={handleFavoriteChange}
-                isLoading={isLoading}
-                isAILearning={isAILearning}
-                hasMore={hasMore}
-              />
+              <>
+                <JobList
+                  recommendations={recommendations}
+                  onAILearn={handleAILearnAndRecommend}
+                  onLoadMore={handleLoadMore}
+                  onFavoriteChange={handleFavoriteChange}
+                  isLoading={isLoading}
+                  isAILearning={isAILearning}
+                  hasMore={hasMore}
+                />
+
+                {/* 외부 채용사이트 아웃링크 */}
+                <div className="mt-6">
+                  <ExternalJobLinks keywords={generateSearchKeywords(profile)} />
+                </div>
+              </>
             ) : (
               <FavoritesList
                 favorites={favorites}
@@ -345,7 +354,11 @@ export default function Home() {
       {/* 푸터 */}
       <footer className="bg-white border-t mt-auto">
         <div className="max-w-4xl mx-auto px-4 py-4 text-center text-sm text-gray-500">
-          AI 기반 취업 공고 추천 시스템
+          <p>AI 기반 취업 공고 추천 시스템</p>
+          <p className="mt-1 text-xs text-gray-400">
+            본 서비스는 각 채용사이트와 제휴 관계가 아니며, 검색 편의를 위해 링크를 제공합니다.
+            채용공고의 정확한 내용은 각 사이트에서 직접 확인하시기 바랍니다.
+          </p>
         </div>
       </footer>
 
